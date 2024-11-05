@@ -49,7 +49,7 @@ I am Osiyomeoh Aleonomoh, a software engineer and Solidity developer with a focu
 
 ## 1.4 Links
 - [GitHub Profile](https://github.com/Osiyomeoh)
-- [LinkedIn Profile](#)
+- [LinkedIn Profile](https://www.linkedin.com/in/samuel-aleonomoh-047495162/)
 
 ## 1.5 FRAX Protocol
 FRAX is a fractional-algorithmic stablecoin protocol that aims to maintain a price target of $1. The protocol uses a dynamic collateral ratio system that adjusts based on market conditions, combining both collateralized and algorithmic mechanisms to maintain stability.
