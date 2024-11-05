@@ -118,6 +118,7 @@ This specialized role has the singular responsibility of toggling collateral rat
 
 ## 2. Contract Review
 
+
 ### 2.1 Import Analysis
 
 #### Core Ethereum Standards
@@ -127,29 +128,34 @@ import "../ERC20/IERC20.sol";
 import "../ERC20/ERC20Custom.sol";
 import "../ERC20/ERC20.sol";
 ```
+The contract's foundation is built on standard Ethereum interfaces and implementations. The Context contract provides essential transaction context functionality through `_msgSender()` and `_msgData()`, ensuring consistent handling of transaction origins across the protocol. IERC20 defines the standard token interface, while ERC20Custom extends the base ERC20 implementation with protocol-specific functionality. This layered approach allows for customization while maintaining compatibility with the ERC20 standard.
 
 #### Utility Libraries
 ```solidity
 import "../Math/SafeMath.sol";
 ```
+SafeMath library integration is crucial for preventing integer overflow and underflow vulnerabilities. All mathematical operations in the contract, particularly those involving collateral ratios, fees, and token amounts, utilize SafeMath to ensure arithmetic safety. This is especially important given the high-value nature of stablecoin operations.
 
 #### Access Control
 ```solidity
 import "../Staking/Owned.sol";
 import "../Governance/AccessControl.sol";
 ```
+The access control system combines basic ownership with role-based permissions. Owned provides fundamental administrative capabilities, while AccessControl enables granular permission management through roles. This dual system allows for both immediate administrative actions and governed protocol changes, creating a balance between operational efficiency and security.
 
 #### Protocol Components
 ```solidity
 import "../FXS/FXS.sol";
 import "./Pools/FraxPool.sol";
 ```
+These components form the core protocol mechanics. The FXS contract manages the protocol's governance token, which plays a crucial role in the algorithmic portion of the stablecoin mechanism. FraxPool defines the interface for liquidity pools, establishing how users can interact with the protocol for minting and redemption operations.
 
 #### Oracle Integrations
 ```solidity
 import "../Oracle/UniswapPairOracle.sol";
 import "../Oracle/ChainlinkETHUSDPriceConsumer.sol";
 ```
+The dual oracle system provides critical price data for the protocol's stability mechanisms. ChainlinkETHUSDPriceConsumer delivers reliable ETH/USD price feeds from Chainlink's decentralized oracle network. UniswapPairOracle monitors FRAX/ETH and FXS/ETH pairs on Uniswap, enabling real-time price discovery. The combination of these oracles creates a robust price feed system with both off-chain and on-chain data sources.
 
 ### 2.2 State Variables
 
@@ -160,6 +166,7 @@ string public name;
 uint8 public constant decimals = 18;
 uint256 public constant genesis_supply = 2000000e18;
 ```
+These variables define the token's basic characteristics. The 18-decimal precision aligns with Ethereum standards, facilitating integration with other protocols. The genesis supply of 2 million tokens provides initial liquidity while allowing for controlled expansion through the minting mechanism. These parameters are immutable after deployment, ensuring consistent token behavior.
 
 #### Access Control
 ```solidity
@@ -169,6 +176,7 @@ address public controller_address;
 address public DEFAULT_ADMIN_ADDRESS;
 bytes32 public constant COLLATERAL_RATIO_PAUSER;
 ```
+The access control structure implements a multi-role system with distinct responsibilities. The creator_address maintains ultimate protocol control, while the timelock_address enables governed changes with execution delays. The controller_address manages routine operations, and the COLLATERAL_RATIO_PAUSER provides emergency intervention capabilities. This separation of powers reduces centralization risks while maintaining operational flexibility.
 
 #### Protocol Parameters
 ```solidity
@@ -180,6 +188,7 @@ uint256 public refresh_cooldown;
 uint256 public price_target;
 uint256 public price_band;
 ```
+These parameters govern the protocol's economic mechanics. The global_collateral_ratio determines the proportion of FRAX backed by collateral, adapting to market conditions. Minting and redemption fees provide protocol revenue while preventing arbitrage exploitation. The frax_step and refresh_cooldown control the pace of collateral ratio adjustments, preventing rapid changes that could destabilize the system. Price_target and price_band define the acceptable range for FRAX's market price, guiding the protocol's stability mechanisms.
 
 ### 2.3 Function Analysis
 
@@ -187,27 +196,63 @@ uint256 public price_band;
 ```solidity
 function oracle_price(PriceChoice choice) internal view returns (uint256)
 ```
-- Combines Chainlink and Uniswap oracle prices
-- Uses ETH as an intermediary
-- Converts to standard precision (1e6)
+The oracle_price function serves as the protocol's price discovery mechanism. It aggregates data from multiple sources:
+- Retrieves ETH/USD price from Chainlink as a trusted base reference
+- Queries Uniswap oracles for FRAX/ETH and FXS/ETH prices
+- Calculates final USD prices using ETH as an intermediary
+- Normalizes all prices to 6 decimal places for consistent comparison
+- Implements checks for price staleness and extreme variations
+
+This function is critical for:
+- Determining when to adjust the collateral ratio
+- Calculating correct minting and redemption amounts
+- Monitoring protocol health through price tracking
 
 #### Collateral Management
 ```solidity
 function refreshCollateralRatio() public
 ```
-- Adjusts ratio based on FRAX price
-- Uses configurable step size
-- Implements cooldown period
-- Targets $1 price with bands
+The collateral ratio management system implements a sophisticated stability mechanism:
+- Monitors FRAX's market price against the target range
+- Adjusts the global collateral ratio incrementally (frax_step)
+- Enforces a cooldown period between adjustments to prevent manipulation
+- Increases collateral requirements when price is below target
+- Decreases collateral requirements when price is above target
+- Emits events for off-chain monitoring and analysis
+
+This mechanism balances stability with capital efficiency by:
+- Responding to market pressure through measured adjustments
+- Preventing rapid changes that could destabilize the system
+- Maintaining price stability while optimizing collateral usage
 
 #### Pool Operations
 ```solidity
 function pool_mint(address m_address, uint256 m_amount) public onlyPools
 function pool_burn_from(address b_address, uint256 b_amount) public onlyPools
 ```
-- Controlled minting/burning
-- Global collateral tracking
-- Fee mechanism implementation
+The pool operations form the core user interaction layer:
+
+Pool Minting Process:
+- Validates caller is an authorized pool
+- Checks global collateral requirements are met
+- Calculates and applies minting fees
+- Creates new FRAX tokens
+- Updates global collateral tracking
+- Emits minting events for transparency
+
+Pool Burning Process:
+- Verifies caller authorization
+- Validates burn amount against user balance
+- Applies redemption fees
+- Destroys FRAX tokens
+- Updates global collateral accounting
+- Emits burning events
+
+These functions maintain system integrity through:
+- Strict access control via onlyPools modifier
+- Accurate fee calculation and collection
+- Proper collateral ratio maintenance
+- Transparent operation logging
 
 ## 3. Findings
 
