@@ -1,6 +1,4 @@
-Here's a refined version of your Smart Contract Audit Report for the FRAX Protocol, including any necessary additions and corrections for clarity and completeness:
 
----
 
 # Smart Contract Audit Report
 
@@ -127,6 +125,280 @@ The FRAXStablecoin contract is the core implementation of the FRAX protocol's st
 <h2 id="review">2.0 CONTRACT REVIEW</h2>
 
 The FRAXStablecoin contract implements several key mechanisms:
+# FRAX Stablecoin Technical Contract Review
+**Version:** 1.0  
+**Date:** November 5, 2024  
+**Contract:** FRAXStablecoin.sol
+
+## 1. Import Analysis
+
+### Core Ethereum Standards
+```solidity
+import "../Common/Context.sol";
+```
+- Provides `_msgSender()` and `_msgData()` functions
+- Used for consistent message context handling across contracts
+
+```solidity
+import "../ERC20/IERC20.sol";
+```
+- Standard ERC20 interface
+- Defines basic token functionality (transfer, approve, etc.)
+
+```solidity
+import "../ERC20/ERC20Custom.sol";
+```
+- Custom implementation of ERC20 standard
+- Base contract for FRAX token functionality
+
+```solidity
+import "../ERC20/ERC20.sol";
+```
+- Standard ERC20 implementation
+- Used as reference for basic token operations
+
+### Utility Libraries
+```solidity
+import "../Math/SafeMath.sol";
+```
+- Prevents integer overflow/underflow
+- Used in all mathematical operations within contract
+
+### Access Control
+```solidity
+import "../Staking/Owned.sol";
+```
+- Implements basic ownership functionality
+- Provides `onlyOwner` modifier
+
+```solidity
+import "../Governance/AccessControl.sol";
+```
+- Role-based access control system
+- Manages different permission levels
+
+### Protocol Components
+```solidity
+import "../FXS/FXS.sol";
+```
+- FXS token contract interface
+- Used for protocol governance token integration
+
+```solidity
+import "./Pools/FraxPool.sol";
+```
+- Pool contract interface
+- Handles minting/burning operations
+
+### Oracle Integrations
+```solidity
+import "../Oracle/UniswapPairOracle.sol";
+```
+- Uniswap price oracle interface
+- Used for FRAX/ETH and FXS/ETH price feeds
+
+```solidity
+import "../Oracle/ChainlinkETHUSDPriceConsumer.sol";
+```
+- Chainlink ETH/USD price feed consumer
+- Provides external price reference
+
+## 2. State Variables
+
+### Core Configuration
+```solidity
+string public symbol;
+string public name;
+uint8 public constant decimals = 18;
+uint256 public constant genesis_supply = 2000000e18;
+```
+- Basic token configuration
+- Initial supply set to 2M FRAX (test value)
+
+### Access Control
+```solidity
+address public creator_address;
+address public timelock_address;
+address public controller_address;
+address public DEFAULT_ADMIN_ADDRESS;
+bytes32 public constant COLLATERAL_RATIO_PAUSER;
+```
+- Defines key administrative addresses
+- Controls system permissions
+
+### Protocol Parameters
+```solidity
+uint256 public global_collateral_ratio;
+uint256 public redemption_fee;
+uint256 public minting_fee;
+uint256 public frax_step;
+uint256 public refresh_cooldown;
+uint256 public price_target;
+uint256 public price_band;
+```
+- Core economic parameters
+- Controls stability mechanism
+
+## 3. Function Analysis
+
+### Constructor
+```solidity
+constructor(
+    string memory _name,
+    string memory _symbol,
+    address _creator_address,
+    address _timelock_address
+) public Owned(_creator_address)
+```
+**Purpose:** Initializes the FRAX contract
+**Operations:**
+- Sets token name and symbol
+- Assigns initial admin roles
+- Mints genesis supply
+- Sets default parameters
+- Validates timelock address
+
+### Price Oracle Functions
+
+#### `oracle_price(PriceChoice choice)`
+```solidity
+function oracle_price(PriceChoice choice) internal view returns (uint256)
+```
+**Purpose:** Calculates USD price for FRAX or FXS
+**Process:**
+1. Gets ETH/USD price from Chainlink
+2. Gets token/ETH price from Uniswap
+3. Calculates token/USD price
+**Security Considerations:**
+- No oracle freshness check
+- Potential price manipulation risks
+
+#### `frax_price()`
+```solidity
+function frax_price() public view returns (uint256)
+```
+**Purpose:** Gets current FRAX/USD price
+**Usage:**
+- Called by stability mechanism
+- Used for CR adjustments
+
+#### `fxs_price()`
+```solidity
+function fxs_price() public view returns (uint256)
+```
+**Purpose:** Gets current FXS/USD price
+**Usage:**
+- Used for protocol calculations
+- Informs stability decisions
+
+### Collateral Management
+
+#### `refreshCollateralRatio()`
+```solidity
+function refreshCollateralRatio() public
+```
+**Purpose:** Adjusts global collateral ratio
+**Process:**
+1. Checks cooldown period
+2. Gets current FRAX price
+3. Adjusts CR based on price bands
+4. Updates timestamp
+**Security Considerations:**
+- Public access risk
+- Front-running vulnerability
+
+#### `globalCollateralValue()`
+```solidity
+function globalCollateralValue() public view returns (uint256)
+```
+**Purpose:** Calculates total collateral value
+**Process:**
+1. Iterates through all pools
+2. Sums collateral balances
+3. Returns total in USD
+**Gas Optimization:**
+- Consider caching array length
+- Potential for gas limit issues
+
+### Pool Management
+
+#### `addPool(address pool_address)`
+```solidity
+function addPool(address pool_address) public onlyByOwnerGovernanceOrController
+```
+**Purpose:** Adds new pool to system
+**Checks:**
+- Non-zero address
+- Pool not already added
+**Security:**
+- No pool contract validation
+- Centralized control
+
+#### `removePool(address pool_address)`
+```solidity
+function removePool(address pool_address) public onlyByOwnerGovernanceOrController
+```
+**Purpose:** Removes pool from system
+**Process:**
+1. Removes from mapping
+2. Nullifies array entry
+**Security:**
+- No active pool balance check
+- Potential stuck funds risk
+
+### Token Operations
+
+#### `pool_mint(address m_address, uint256 m_amount)`
+```solidity
+function pool_mint(address m_address, uint256 m_amount) public onlyPools
+```
+**Purpose:** Mints new FRAX tokens
+**Security:**
+- Only callable by pools
+- Emits minting event
+
+#### `pool_burn_from(address b_address, uint256 b_amount)`
+```solidity
+function pool_burn_from(address b_address, uint256 b_amount) public onlyPools
+```
+**Purpose:** Burns FRAX tokens
+**Security:**
+- Only callable by pools
+- Emits burning event
+
+### Parameter Management Functions
+
+#### Fee Management
+```solidity
+function setRedemptionFee(uint256 red_fee)
+function setMintingFee(uint256 min_fee)
+```
+**Purpose:** Updates protocol fees
+**Security Issues:**
+- No maximum fee limits
+- No validation checks
+
+#### Price Band Management
+```solidity
+function setPriceTarget(uint256 _new_price_target)
+function setPriceBand(uint256 _price_band)
+```
+**Purpose:** Controls price stability parameters
+**Security Issues:**
+- No bounds checking
+- Potential stability risks
+
+### Oracle Management
+```solidity
+function setFRAXEthOracle(address _frax_oracle_addr, address _weth_address)
+function setFXSEthOracle(address _fxs_oracle_addr, address _weth_address)
+```
+**Purpose:** Updates oracle addresses
+**Security:**
+- Address validation
+- No oracle interface check
+
+
 
 ## Price Oracle System
 ```solidity
